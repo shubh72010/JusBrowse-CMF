@@ -1,0 +1,4 @@
+.sdk/
+target/
+*.wp2app
+*.bin

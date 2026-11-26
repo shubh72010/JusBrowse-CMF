@@ -1,0 +1,9 @@
+[package]
+name = "companion-rpc"
+description = "The watch side of FMC Companion's miniapp RPC: requests, replies and records, no_std, no allocation"
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+
+[lib]
+bench = false

@@ -1,0 +1,4 @@
+name = "JusBrowse"
+summary = "A tiny text browser: the phone fetches the page, the watch shows it"
+version = "0.2.0"
+author = "Følius"
