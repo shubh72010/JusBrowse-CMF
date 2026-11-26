@@ -217,6 +217,7 @@ mod device {
             rpc::Got::Nothing => {}
             rpc::Got::Status(s) => {
                 set_status(match s {
+                    1 => "Bad URL - phone refused",
                     2 => "Denied on phone",
                     3 => "Unavailable",
                     4 => "Allow in companion",
@@ -350,7 +351,9 @@ mod device {
                     pos = end;
                     row += 1;
                 }
-                line(api, 428, if st.back == Mode::Results {
+                line(api, 428, if st.mode == Mode::Error {
+                    b"Tap=retry BTN=back"
+                } else if st.back == Mode::Results {
                     b"Tap=full Crown=scroll BTN=back"
                 } else {
                     b"Crown=scroll BTN=back"
@@ -371,6 +374,7 @@ mod device {
         st().ask_call.now(api.now());
         loop {
             let mut timed_out = false;
+            let mut bad_url = false;
             if !paused && st().mode == Mode::Loading {
                 let now = api.now();
                 let st = st();
@@ -386,12 +390,19 @@ mod device {
                     let url = core::str::from_utf8(&st.url[..st.url_len]).unwrap_or("");
                     if let Some(m) = rpc::http_get(id, url) {
                         let _ = api.send(&m);
+                        st.last_send = now;
+                    } else {
+                        st.http_call.stop();
+                        st.mode = Mode::Error;
+                        bad_url = true;
                     }
-                    st.last_send = now;
                 }
             }
             if timed_out {
                 set_status("No answer - phone?");
+                draw(api);
+            } else if bad_url {
+                set_status("URL too long");
                 draw(api);
             }
             if !paused {
@@ -471,6 +482,10 @@ mod device {
                             let len = st.results.title_lens[i];
                             set_status_code_for_title(&st.results.titles[i][..len]);
                         }
+                    } else if mode == Mode::Error {
+                        let now = api.now();
+                        st().http_call.stop();
+                        go(now);
                     } else if mode == Mode::View && st().back == Mode::Results {
                         // Second tap on a preview fetches the full article.
                         open_result(api.now());
