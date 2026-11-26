@@ -245,7 +245,7 @@ mod device {
                     }
                     match st.want {
                         Want::Search => {
-                            logic::parse_results(&st.body[..body_len], &mut st.results);
+                            logic::parse_search(&st.body[..body_len], &mut st.results);
                             if st.results.count > 0 {
                                 let mut buf = [0u8; 24];
                                 let n = (b"results ").len();
@@ -471,9 +471,14 @@ mod device {
                     } else if mode == Mode::Results {
                         let i = ((e.y - 56) / 22) as usize;
                         if i < st().results.count {
+                            st().selected = i;
+                            let n = st().results.body_lens[i];
+                            if n == 0 {
+                                open_result(api.now());
+                                draw(api);
+                                continue;
+                            }
                             let st = st();
-                            st.selected = i;
-                            let n = st.results.body_lens[i];
                             st.text[..n].copy_from_slice(&st.results.bodies[i][..n]);
                             st.text_len = n;
                             st.scroll = 0;

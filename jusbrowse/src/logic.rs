@@ -56,10 +56,10 @@ fn encode(dst: &mut [u8], at: &mut usize, bytes: &[u8]) {
 /// (Bing/Mojeek/DDG RSS are 4-6 KiB and are rejected as TOO_LARGE).
 pub fn search_url(query: &[u8], out: &mut [u8; MAX_URL]) -> usize {
     let mut n = 0;
-    // One request returns titles AND excerpts: tapping a result needs no second round trip.
-    put(out, &mut n, b"https://en.wikipedia.org/w/rest.php/v1/search/page?q=");
+    // This endpoint is the one the phone reliably accepts; REST search returned BAD_REQUEST on the watch.
+    put(out, &mut n, b"https://en.wikipedia.org/w/api.php?action=opensearch&search=");
     encode(out, &mut n, query);
-    put(out, &mut n, b"&limit=2");
+    put(out, &mut n, b"&limit=5&format=json");
     n
 }
 
@@ -343,7 +343,7 @@ mod tests {
         let mut url = [0u8; MAX_URL];
         let n = search_url(b"hello world", &mut url);
         let s = core::str::from_utf8(&url[..n]).unwrap();
-        assert!(s.starts_with("https://en.wikipedia.org/w/rest.php/v1/search/page?q="));
+        assert!(s.starts_with("https://en.wikipedia.org/w/api.php?action=opensearch&search="));
         assert!(s.contains("hello+world"));
         assert!(n <= MAX_URL);
         let n = search_url(&[b'a'; 200], &mut url);
