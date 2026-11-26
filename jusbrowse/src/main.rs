@@ -50,6 +50,8 @@ mod device {
         head_code: u16,
         http_call: Call,
         ask_call: Call,
+        started: u32,
+        last_send: u32,
         ids: u8,
         ask_ids: u8,
         asked: bool,
@@ -66,7 +68,8 @@ mod device {
                 body: [0; MAX_BODY], text: [0; MAX_BODY], url: [0; logic::MAX_URL],
                 input: [0; MAX_INPUT], status: [0; 64], results: logic::Results::new(),
                 input_len: 0, url_len: 0, body_len: 0, text_len: 0, status_len: 0, head_code: 0,
-                http_call: Call::new(8000), ask_call: Call::new(8000), ids: 0, ask_ids: 200, asked: false,
+                http_call: Call::new(8000), ask_call: Call::new(8000), started: 0, last_send: 0,
+                ids: 0, ask_ids: 200, asked: false,
                 selected: 0, scroll: 0,
                 mode: Mode::Home, want: Want::Search, back: Mode::Home,
             }
@@ -169,6 +172,8 @@ mod device {
         st.head_code = 0;
         st.scroll = 0;
         st.http_call.now(api_now);
+        st.started = api_now;
+        st.last_send = api_now;
         set_status("Fetching...");
     }
 
@@ -303,7 +308,11 @@ mod device {
             }
             Mode::Loading => {
                 line(api, 80, b"Loading...", WHITE);
-                line(api, 110, status_str().as_bytes(), GREY);
+                let secs = api.now().wrapping_sub(st.started) / 1000;
+                let mut wait_buf = [0u8; 16];
+                wait_buf[..10].copy_from_slice(b"Fetching ");
+                wait_buf[10] = b'0' + (secs % 10) as u8;
+                line(api, 110, &wait_buf[..11], GREY);
                 line(api, 428, b"BTN=cancel", GREY);
             }
             Mode::Results => {
@@ -361,15 +370,29 @@ mod device {
         st().asked = true;
         st().ask_call.now(api.now());
         loop {
+            let mut timed_out = false;
             if !paused && st().mode == Mode::Loading {
                 let now = api.now();
                 let st = st();
-                if let Some(id) = st.http_call.due(now, &mut st.ids) {
+                // The companion's retry backoff is 3/6/8 s; force a fresh send every second instead.
+                if now.wrapping_sub(st.last_send) >= 1000 {
+                    st.http_call.now(now);
+                }
+                if now.wrapping_sub(st.started) >= 6000 {
+                    st.http_call.stop();
+                    st.mode = Mode::Error;
+                    timed_out = true;
+                } else if let Some(id) = st.http_call.due(now, &mut st.ids) {
                     let url = core::str::from_utf8(&st.url[..st.url_len]).unwrap_or("");
                     if let Some(m) = rpc::http_get(id, url) {
                         let _ = api.send(&m);
                     }
+                    st.last_send = now;
                 }
+            }
+            if timed_out {
+                set_status("No answer - phone?");
+                draw(api);
             }
             if !paused {
                 let now = api.now();
